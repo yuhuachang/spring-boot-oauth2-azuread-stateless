@@ -1,18 +1,120 @@
-<!DOCTYPE html>
+<!-- this is a very simple single page application using AzureAD -->
+<!-- for demonstration, this page is placed inside spring boot project, but it can be placed in any web server. -->
 <html>
-<head>
-  <title>Demo</title>
-</head>
-<body>
+  <header>
+    <script src="https://secure.aadcdn.microsoftonline-p.com/lib/1.0.14/js/adal.min.js"></script>
+    <script>
+      var azureConfig = {
+        instance: 'https://login.microsoftonline.com/',
+        tenant: '<tenant id>',
+        clientId: '<client id>',
+        cacheLocation: 'localStorage', // enable this for IE, as sessionStorage does not work for localhost.
+        endpoints: {
+          graphApiUri: "https://graph.microsoft.com"
+        }
+      };
+      
+      var authContext = new AuthenticationContext(azureConfig);
+      console.log(authContext);
+      
+      var isCallback = authContext.isCallback(window.location.hash);
+      authContext.handleWindowCallback();
+      
+      if (isCallback && !authContext.getLoginError()) {
+         console.log('check login...');
+         window.location = authContext._getItem(authContext.CONSTANTS.STORAGE.LOGIN_REQUEST);
+      }
 
-  <div>This is a single page application. Everybody can see this. The following links require authentication.</div>
+      function login() {
+        authContext.login();
+      }
 
-  <div><a href="/principal">Get current user info</a></div>
-  <div><a href="/users">Check users permission</a></div>
-  <div><a href="/admin">Check admin permission</a></div>
+      function logout() {
+        authContext.logOut();
+      }
+    </script>
+  </header>
+  <body>
+    <!-- show login info -->
+    <div id="info">N/A</div>
+    <button onClick="login()">Login</button>
+    <button onClick="logout()">Logout</button>
+    <script>
+      var info = document.getElementById('info');
+      var user = authContext.getCachedUser();
+      if (user) {
+     console.log(user);
+        info.innerText = 'username: ' + user.userName + ' name: ' + user.profile.name;
+      } else {
+        info.innerText = 'not logged in yet';
+      }
+    </script>
+    
+    <!-- AJAX Call with token -->
+    <div id="result">no call yet.</div>
+    <script>
+      var result = document.getElementById('result');
 
-  <script type="text/javascript">
+      function callApi() {
+        // Acquire token, add the token to the header and make ajax call.
+        authContext.acquireToken(authContext.config.clientId, function(error, token) {
+          if (error) {
+            // Handle ADAL Errors.
+            console.log('ADAL error occurred: ' + error);
+            return;
+          }
+  
+          var headers = new Headers({
+            'Accept': 'application/json;charset=UTF-8',
+            'Content-Type': 'application/json;charset=UTF-8',
+            'Authorization': 'Bearer ' + token
+          });
+  
+          var params = {
+            method: 'GET',
+            headers: headers
+          };
+  
+          // change the user to where your service is
+          fetch('http://localhost/users', params).then((response) => {
+            console.log('response.status', response.status);
+            console.log('response.body', response.body);
+            return response.json();
+          }).then((json) => {
+            console.log('JSON', json);
+            result.innerText = json.content;
+          }).catch(function(err) {
+            console.log('Fetch Error: ', err);
+          });
+        });
+      }
+      
+      function callApiWithoutToken() {
+        var headers = new Headers({
+          'Accept': 'application/json;charset=UTF-8',
+          'Content-Type': 'application/json;charset=UTF-8'
+        });
 
-  </script>
-</body>
+        var params = {
+          method: 'GET',
+          headers: headers
+        };
+
+        // change the user to where your service is
+        fetch('http://localhost/users', params).then((response) => {
+          console.log('response.status', response.status);
+          console.log('response.body', response.body);
+          return response.json();
+        }).then((json) => {
+          console.log('JSON', json);
+          result.innerText = json.content;
+        }).catch(function(err) {
+          console.log('Fetch Error: ', err);
+        });
+      }
+      
+    </script>
+    <button onClick="callApi()">Call API with token</button>
+    <button onClick="callApiWithoutToken()">Call API without token</button>
+  </body>
 </html>

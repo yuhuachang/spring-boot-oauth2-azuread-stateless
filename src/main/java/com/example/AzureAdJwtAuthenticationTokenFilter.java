@@ -20,6 +20,11 @@ import org.springframework.security.web.authentication.preauth.PreAuthenticatedA
 import org.springframework.stereotype.Service;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+/**
+ * 
+ * @author Yu-Hua Chang
+ *
+ */
 @Service
 public class AzureAdJwtAuthenticationTokenFilter extends OncePerRequestFilter {
     
@@ -37,14 +42,12 @@ public class AzureAdJwtAuthenticationTokenFilter extends OncePerRequestFilter {
         if (tmp != null) {
             if (tmp.startsWith(TOKEN_TYPE)) {
                 String jwtText = tmp.substring(TOKEN_TYPE.length());
-
                 if (log.isDebugEnabled()) {
                     log.debug("Raw JWT token: >>{}<<", jwtText);
                 }
 
                 // Create Azure jwt token.
                 AzureAdJwtToken jwt = new AzureAdJwtToken(jwtText);
-
                 if (log.isDebugEnabled()) {
                     log.debug("JWT: {}", jwt);
                 }
@@ -61,11 +64,12 @@ public class AzureAdJwtAuthenticationTokenFilter extends OncePerRequestFilter {
 
                     // set roles
                     if ("john@example.com".equals(jwt.getUniqueName())) {
-                        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
-                    } else if ("marry@example.com".equals(jwt.getUniqueName())) {
                         authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+                    } else {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
                     }
 
+                    // set authentication to Spring so Spring Security understands it.
                     Authentication authentication = new PreAuthenticatedAuthenticationToken(jwt, null, authorities);
                     authentication.setAuthenticated(true);
                     log.info("Request token verification success. {}", authentication);

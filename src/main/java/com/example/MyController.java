@@ -1,6 +1,8 @@
 package com.example;
 
 import java.security.Principal;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -21,13 +23,17 @@ public class MyController {
     
     @PreAuthorize("hasRole('ROLE_USER')")
     @GetMapping("/users")
-    public String users() {
-        return "I have users permission";
+    public Map<String, Object> users() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("content", "I have users permission");
+        return response;
     }
     
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @GetMapping("/admin")
-    public String admin() {
-        return "I have admin permission";
+    public Map<String, Object> admin() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("content", "I have admin permission");
+        return response;
     }
 }

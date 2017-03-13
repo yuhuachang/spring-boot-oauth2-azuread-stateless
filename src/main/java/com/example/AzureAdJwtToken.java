@@ -16,17 +16,23 @@ import java.util.Base64;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTVerifier;
 import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 
 /**
  * 
  * @author Yu-Hua Chang
+ * 
  */
 public class AzureAdJwtToken {
+
+    private static final Logger log = LoggerFactory.getLogger(AzureAdJwtToken.class);
 
     protected final String token;
 
@@ -47,34 +53,36 @@ public class AzureAdJwtToken {
         
         // Header
         String headerStr = new String(Base64.getUrlDecoder().decode((parts[0])));
-//        System.out.println(headerStr);
+        if (log.isDebugEnabled()) {
+            log.debug("JWT Header: {}", headerStr);
+        }
+
         JSONObject header = new JSONObject(headerStr);
-//        System.out.println("typ = " + header.getString("typ"));
-//        System.out.println("alg = " + header.getString("alg"));
-//        System.out.println("x5t = " + header.getString("x5t"));
-//        System.out.println("kid = " + header.getString("kid"));
-//        System.out.println("---------------------------------");
-        
         x5t = header.getString("x5t");
         kid = header.getString("kid");
-
+        if (log.isDebugEnabled()) {
+            log.debug("JWT Header x5t: {}", x5t);
+            log.debug("JWT Header kid: {}", kid);
+        }
+        
         // Payload
         // reserved, public, and private claims.
         String payloadStr = new String(Base64.getUrlDecoder().decode((parts[1])));
-//        System.out.println(payloadStr);
+        if (log.isDebugEnabled()) {
+            log.debug("JWT Payload: {}", payloadStr);
+        }
+
         JSONObject payload = new JSONObject(payloadStr);
-//        System.out.println("aud = " + payload.getString("aud"));
-//        System.out.println("iss = " + payload.getString("iss"));
-//        System.out.println("ipaddr = " + payload.getString("ipaddr"));
-//        System.out.println("name = " + payload.getString("name"));
-//        System.out.println("unique_name = " + payload.getString("unique_name"));
-//        System.out.println("upn = " + payload.getString("upn"));
-//        System.out.println("---------------------------------");
-        
         issuer = payload.getString("iss");
         ipAddr = payload.getString("ipaddr");
         name = payload.getString("name");
         uniqueName = payload.getString("unique_name");
+        if (log.isDebugEnabled()) {
+            log.debug("JWT Payload issuer: {}", issuer);
+            log.debug("JWT Payload ipAddr: {}", ipAddr);
+            log.debug("JWT Payload name: {}", name);
+            log.debug("JWT Payload uniqueName: {}", uniqueName);
+        }
     }
     
     /**
@@ -95,35 +103,32 @@ public class AzureAdJwtToken {
 
         // Key Info (RSA PublicKey)
         String openidConfigStr = readUrl("https://login.microsoftonline.com/common/.well-known/openid-configuration");
-//        System.out.println(openidConfigStr);
-        JSONObject openidConfig = new JSONObject(openidConfigStr);
-//        System.out.println("---------------------------------");
+        if (log.isDebugEnabled()) {
+            log.debug("AAD OpenID Config: {}", openidConfigStr);
+        }
 
+        JSONObject openidConfig = new JSONObject(openidConfigStr);
         String jwksUri = openidConfig.getString("jwks_uri");
-//        System.out.println(jwksUri);
-//        System.out.println("---------------------------------");
-        
+        if (log.isDebugEnabled()) {
+            log.debug("AAD OpenID Config jwksUri: {}", jwksUri);
+        }
+
         String jwkConfigStr = readUrl(jwksUri);
-//        System.out.println(jwkConfigStr);
+        if (log.isDebugEnabled()) {
+            log.debug("AAD OpenID JWK Config: {}", jwkConfigStr);
+        }
+
         JSONObject jwkConfig = new JSONObject(jwkConfigStr);
-//        System.out.println("---------------------------------");
-        
         JSONArray keys = jwkConfig.getJSONArray("keys");
         for (int i = 0; i < keys.length(); i++) {
             JSONObject key = keys.getJSONObject(i);
 
             String kid = key.getString("kid");
-            String x5t = key.getString("x5t");
-            String n = key.getString("n");
-            String e = key.getString("e");
+            if (!this.kid.equals(kid)) {
+                continue;
+            }
+
             String x5c = key.getJSONArray("x5c").getString(0);
-
-//            System.out.println("kid: " + kid);
-//            System.out.println("x5t: " + x5t);
-//            System.out.println("n: " + n);
-//            System.out.println("e: " + e);
-//            System.out.println("x5c: " + x5c);
-
             String keyStr = "-----BEGIN CERTIFICATE-----\r\n";
             String tmp = x5c;
             while (tmp.length() > 0) {
@@ -137,34 +142,30 @@ public class AzureAdJwtToken {
                 }
             }
             keyStr += "-----END CERTIFICATE-----\r\n";
-//            System.out.println(keyStr);
+            if (log.isDebugEnabled()) {
+                log.debug("AAD OpenID Key:\n{}", keyStr);
+            }
+
             /*
-             * go to https://jwt.io/ and copy'n'paste the thow jwt token to the left side, it will be decoded on the right side,
-             * copy'n'past the public key (from ----BEGIN... to END CERT...) to the verify signature part, it will show signature verified.
+             * go to https://jwt.io/ and copy'n'paste the jwt token to the left side, it will be decoded on the right side,
+             * copy'n'past the public key (from ----BEGIN... to END CERT...) to the verify signature, it will show signature verified.
              */
-            
-            //byte[] keyBytes = keyStr.getBytes();
-            //byte[] keyBytes = x5c.getBytes();
-            //byte[] keyBytes = Base64.getDecoder().decode(x5c);
-            
-//            X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
-//            KeyFactory kf = KeyFactory.getInstance("RSA");
-//            PublicKey publicKey = kf.generatePublic(spec);
-//            System.out.println(publicKey);
-            
+
             // read certification
             CertificateFactory fact = CertificateFactory.getInstance("X.509");
             InputStream stream = new ByteArrayInputStream(keyStr.getBytes(StandardCharsets.US_ASCII));
             X509Certificate cer = (X509Certificate) fact.generateCertificate(stream);
-//            System.out.println(cer);
+            if (log.isTraceEnabled()) {
+                log.trace("AAD OpenID X509Certificate: {}", cer);
+            }
             
             // get public key from certification
             PublicKey publicKey = cer.getPublicKey();
-//            System.out.println(publicKey);
-            
-            if (this.kid.equals(kid)) {
-                return publicKey;
+            if (log.isDebugEnabled()) {
+                log.debug("AAD OpenID X509Certificate publicKey: {}", publicKey);
             }
+
+            return publicKey;
         }
         return null;
     }
@@ -183,25 +184,18 @@ public class AzureAdJwtToken {
     }
     
     public void verify() throws IOException, CertificateException {
-
         PublicKey publicKey = loadPublicKey();
-        
-//        Cipher cipher = Cipher.getInstance("RSA/ECB/NoPadding");
-//        cipher.init(Cipher.DECRYPT_MODE, publicKey);
-//        byte[] encryptedbytes = cipher.doFinal(Base64.getUrlDecoder().decode(signatureStr.getBytes()));
-//        String result = Base64.getUrlEncoder().encodeToString(encryptedbytes);
-//        System.out.println("---------------------------------");
-//        System.out.println(result);
-//        System.out.println(parts[0] + parts[1]);
-//        
-//        System.out.println("---------------------------------");
-        
-        //TODO: possible decode without 3rd party library...
-        JWTVerifier verifier = JWT.require(Algorithm.RSA256((RSAKey) publicKey)).withIssuer(issuer).build();
-        DecodedJWT jwt = verifier.verify(token);
-//        System.out.println("DecodedJWT");
-//        System.out.println(jwt);
-//        System.out.println("---------------------------------");
+        try {
+            JWTVerifier verifier = JWT.require(Algorithm.RSA256((RSAKey) publicKey)).withIssuer(issuer).build();
+            DecodedJWT jwt = verifier.verify(token);
+            if (log.isDebugEnabled()) {
+                log.debug("AAD jwt issuer: {}", jwt.getIssuer());
+                log.debug("AAD jwt issued at: {}", jwt.getIssuedAt());
+                log.debug("AAD jwt expires at: {}", jwt.getExpiresAt());
+            }
+        } catch (JWTVerificationException exception) {
+            throw new RuntimeException("JWT Token verification failed!");
+        }
     }
 
     public String getIpAddr() {
@@ -218,7 +212,6 @@ public class AzureAdJwtToken {
 
     @Override
     public String toString() {
-        return "AzureAdJwtToken [issuer=" + issuer + ", ipAddr=" + ipAddr + ", name=" + name + ", uniqueName="
-                + uniqueName + "]";
+        return "AzureAdJwtToken [issuer=" + issuer + ", ipAddr=" + ipAddr + ", name=" + name + ", uniqueName=" + uniqueName + "]";
     }
 }
